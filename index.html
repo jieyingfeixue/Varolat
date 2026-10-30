@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VALORANT ACCESS PROTOCOL</title>
+<style>
+:root {
+  --accent: #ff4655;
+  --accent-glow: rgba(255, 70, 85, 0.4);
+  --cyan: #00f0ff;
+  --bg-dark: #0b1016;
+  --text-main: #ffffff;
+  --text-muted: #8b9bb4;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-dark);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: var(--text-main);
+  overflow: hidden; /* 防止粒子溢出出现滚动条 */
+}
+
+/* 动态粒子背景 */
+#bg-canvas {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  z-index: -1;
+  background: radial-gradient(circle at center, #1a232e 0%, var(--bg-dark) 100%);
+}
+
+/* 扫描线特效 */
+.scanlines {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1));
+  background-size: 100% 4px;
+  z-index: 0; pointer-events: none; opacity: 0.3;
+}
+
+/* 主体卡片：玻璃拟态 + 霓虹边框 */
+.card {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  background: rgba(15, 25, 35, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 70, 85, 0.2);
+  border-radius: 4px; /* 更硬朗的边角 */
+  padding: 40px 36px;
+  z-index: 1;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(255, 70, 85, 0.05);
+  animation: card-in 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 卡片四个角的科幻装饰 */
+.card::before, .card::after {
+  content: ''; position: absolute; width: 20px; height: 20px; pointer-events: none;
+}
+.card::before {
+  top: -1px; left: -1px;
+  border-top: 2px solid var(--accent); border-left: 2px solid var(--accent);
+}
+.card::after {
+  bottom: -1px; right: -1px;
+  border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent);
+}
+
+.tag {
+  display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: 3px;
+  color: var(--accent); background: rgba(255, 70, 85, 0.1);
+  border-left: 3px solid var(--accent); padding: 4px 10px; margin-bottom: 20px;
+  text-transform: uppercase; animation: pulse 2s infinite;
+}
+
+h1 { font-size: 24px; font-weight: 800; letter-spacing: 1px; margin-bottom: 8px; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
+.sub { color: var(--text-muted); font-size: 13px; line-height: 1.6; margin-bottom: 30px; letter-spacing: 0.5px; }
+
+label {
+  display: block; font-size: 11px; font-weight: 700; color: var(--text-muted);
+  letter-spacing: 1.5px; margin: 20px 0 8px; text-transform: uppercase;
+  transition: color 0.3s;
+}
+
+/* 科幻输入框 */
+input, textarea {
+  width: 100%; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(139, 155, 180, 0.3);
+  color: var(--cyan); padding: 14px; border-radius: 2px; font-size: 14px; font-family: monospace;
+  outline: none; transition: all 0.3s ease;
+}
+input::placeholder, textarea::placeholder { color: rgba(139, 155, 180, 0.4); font-family: sans-serif; }
+textarea { resize: vertical; min-height: 90px; }
+
+input:focus, textarea:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.2), inset 0 0 10px rgba(0, 240, 255, 0.1);
+  background: rgba(0, 240, 255, 0.05);
+}
+input:focus + label, textarea:focus + label { color: var(--cyan); }
+
+/* 按钮：切角 + 流光 */
+button {
+  width: 100%; margin-top: 30px; padding: 16px; position: relative;
+  background: transparent; color: #fff; border: 1px solid var(--accent);
+  font-size: 15px; font-weight: 800; letter-spacing: 2px; cursor: pointer;
+  text-transform: uppercase; overflow: hidden;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  transition: all 0.3s ease;
+}
+button::before {
+  content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 70, 85, 0.4), transparent);
+  transition: left 0.5s ease;
+}
+button:hover { background: rgba(255, 70, 85, 0.1); box-shadow: 0 0 20px var(--accent-glow); }
+button:hover::before { left: 100%; }
+button:active { transform: scale(0.98); }
+button:disabled { border-color: #333; color: #555; cursor: not-allowed; clip-path: none; }
+
+/* 状态面板 */
+#status { display: none; text-align: center; padding: 20px 0; opacity: 0; transition: opacity 0.5s; }
+#status.show { display: block; opacity: 1; }
+#status h2 { margin-bottom: 12px; font-size: 20px; letter-spacing: 2px; }
+#status p { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+#status.error h2 { color: var(--accent); text-shadow: 0 0 15px var(--accent-glow); }
+#status.success h2 { color: #4ade80; text-shadow: 0 0 15px rgba(74, 222, 128, 0.4); }
+
+/* 隐藏蜜罐 */
+.hp { display: none !important; }
+
+@keyframes card-in { from { opacity: 0; transform: translateY(30px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+/* 手机适配 */
+@media (max-width: 500px) { .card { padding: 30px 20px; border-radius: 0; border-left: 0; border-right: 0; } }
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+<div class="scanlines"></div>
+
+<div class="card">
+  <div class="tag">System Alert</div>
+  <h1>想和圣圣打无畏契约的陪玩申请</h1>
+  <p class="sub">ACCESS DENIED. 请填写以下信息进行身份验证。通过率取决于我的心情。</p>
+
+  <div id="status"></div>
+
+  <form id="f">
+    <!-- 记得替换这里的 Key -->
+    <input type="hidden" name="access_key" value="2c2db1da-bdd0-4de0-9fa1-fe73681283b6">
+    <input type="hidden" name="subject" value="⚡ 新的无畏契约陪玩申请">
+    <input type="hidden" name="from_name" value="Vanguard Protocol">
+    <input type="checkbox" name="botcheck" class="hp" tabindex="-1" autocomplete="off">
+
+    <label>Riot ID / 游戏 ID *</label>
+    <input name="Riot_ID" placeholder="PlayerName#TAG" required maxlength="40">
+
+    <label>预约时间 (TIME)</label>
+    <input name="预约时间" placeholder="例如：周五晚 20:00 - 23:00" maxlength="60">
+
+    <label>申请理由 (REASON)</label>
+    <textarea name="申请理由" placeholder="说说为什么值得我翻牌..." maxlength="500"></textarea>
+
+    <button type="submit" id="btn">初始化连接</button>
+  </form>
+</div>
+
+<script>
+// ==========================================
+// 1. 动态粒子网络背景 (Canvas)
+// ==========================================
+const canvas = document.getElementById('bg-canvas');
+const ctx = canvas.getContext('2d');
+let particles = [];
+let mouse = { x: null, y: null, radius: 150 };
+
+window.addEventListener('mousemove', (e) => { mouse.x = e.x; mouse.y = e.y; });
+window.addEventListener('mouseout', () => { mouse.x = null; mouse.y = null; });
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+class Particle {
+  constructor() {
+    this.x = Math.random() * canvas.width;
+    this.y = Math.random() * canvas.height;
+    this.size = Math.random() * 2 + 1;
+    this.baseX = this.x;
+    this.baseY = this.y;
+    this.density = (Math.random() * 30) + 1;
+    // 速度用于漂浮
+    this.vx = (Math.random() - 0.5) * 0.5;
+    this.vy = (Math.random() - 0.5) * 0.5;
+  }
+  draw() {
+    ctx.fillStyle = 'rgba(255, 70, 85, 0.6)'; // 红色粒子
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fill();
+  }
+  update() {
+    // 漂浮
+    this.x += this.vx;
+    this.y += this.vy;
+
+    // 边界反弹
+    if (this.x < 0 || this.x > canvas.width) this.vx = -this.vx;
+    if (this.y < 0 || this.y > canvas.height) this.vy = -this.vy;
+
+    // 鼠标交互
+    if (mouse.x != null) {
+      let dx = mouse.x - this.x;
+      let dy = mouse.y - this.y;
+      let distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < mouse.radius) {
+        let forceDirectionX = dx / distance;
+        let forceDirectionY = dy / distance;
+        let force = (mouse.radius - distance) / mouse.radius;
+        let directionX = forceDirectionX * force * this.density;
+        let directionY = forceDirectionY * force * this.density;
+        this.x -= directionX;
+        this.y -= directionY;
+      }
+    }
+  }
+}
+
+function init() {
+  particles = [];
+  let count = (canvas.width * canvas.height) / 12000; // 根据屏幕面积计算粒子数
+  for (let i = 0; i < count; i++) {
+    particles.push(new Particle());
+  }
+}
+init();
+
+function animate() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < particles.length; i++) {
+    particles[i].draw();
+    particles[i].update();
+    // 连接附近的点
+    for (let j = i; j < particles.length; j++) {
+      let dx = particles[i].x - particles[j].x;
+      let dy = particles[i].y - particles[j].y;
+      let distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < 120) {
+        let opacity = 1 - (distance / 120);
+        ctx.strokeStyle = `rgba(0, 240, 255, ${opacity * 0.4})`; // 青色连线
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.stroke();
+      }
+    }
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+
+// 窗口大小改变时重置粒子
+window.addEventListener('resize', () => { resize(); init(); });
+
+
+// ==========================================
+// 2. 表单提交逻辑 (Web3Forms)
+// ==========================================
+const form = document.getElementById('f');
+const btn = document.getElementById('btn');
+const status = document.getElementById('status');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  btn.disabled = true;
+  btn.textContent = '验证中...';
+
+  try {
+    const res = await fetch('https://api.web3forms.com/submit', {
+      method: 'POST',
+      body: new FormData(form),
+      headers: { 'Accept': 'application/json' }
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      form.style.display = 'none';
+      status.className = 'show success';
+      status.innerHTML = '<h2>🔒 验证通过</h2><p>数据已上传至终端。<br>等待管理员（我）的最终授权。</p>';
+    } else {
+      throw new Error(data.message || '连接中断');
+    }
+  } catch (err) {
+    status.className = 'show error';
+    status.innerHTML = '<h2>⚠️ 协议错误</h2><p>' + err.message + '</p>';
+    btn.disabled = false;
+    btn.textContent = '重试';
+  }
+});
+</script>
+</body>
+</html>
